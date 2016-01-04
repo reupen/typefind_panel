@@ -1,3 +1,4 @@
+
 #pragma once
 
 enum t_search_mode {
@@ -51,11 +52,9 @@ class progressive_search {
 				{
 					if (m_filter[n])
 					{
-						if (b_first)
-						{
-							focus = n;
-							b_first = false;
-						}
+						focus = n;
+						b_first = false;
+						break;
 					}
 				}
 				else
