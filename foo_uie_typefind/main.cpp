@@ -2,7 +2,7 @@
 
 DECLARE_COMPONENT_VERSION("Typefind",
 
-"0.2.1",
+"0.3",
 
 "allows you to locate tracks fast\n\n"
 "compiled: " __DATE__ "\n"
