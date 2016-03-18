@@ -66,7 +66,7 @@ void quickfind_window::g_update_all_fonts()
 		DeleteObject(g_font);
 	}
 
-	g_font = CreateFontIndirect(&(LOGFONT)cfg_font);
+	g_font = CreateFontIndirect(&cfg_font.get_value());
 
 	unsigned n, count = quickfind_window::list_wnd.get_count();
 	for (n=0; n<count; n++)
