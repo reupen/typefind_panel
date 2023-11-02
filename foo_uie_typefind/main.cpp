@@ -13,7 +13,7 @@ DECLARE_COMPONENT_VERSION("Typefind",
 
 cfg_int cfg_frame(GUID{0x05550547, 0xbf98, 0x088c, {0xbe, 0x0e, 0x24, 0x95, 0xe4, 0x9b, 0x88, 0xc7}}, 2);
 
-inline static LOGFONT get_def_font()
+static LOGFONT get_def_font()
 {
     LOGFONT foo;
     uGetMenuFont(&foo);
@@ -31,80 +31,80 @@ cfg_string cfg_default_search(
     GUID{0xe6e375cd, 0x6b89, 0x5fc8, {0x3f, 0xec, 0xce, 0xf4, 0x8b, 0xdc, 0x94, 0xcf}}, "%artist% - %title%");
 cfg_int_t<t_uint32> cfg_default_search_mode(guid_default_search_mode, 0);
 
-pfc::ptr_list_t<quickfind_window> quickfind_window::list_wnd;
-HFONT quickfind_window::g_font = 0;
-
-void quickfind_window::g_update_all_fonts()
+void TypefindWindow::s_update_all_fonts()
 {
-    if (g_font != 0) {
-        unsigned n, count = quickfind_window::list_wnd.get_count();
-        for (n = 0; n < count; n++) {
-            HWND wnd = quickfind_window::list_wnd[n]->wnd_edit;
-            if (wnd)
-                uSendMessage(wnd, WM_SETFONT, (WPARAM)0, MAKELPARAM(0, 0));
+    if (s_font != nullptr) {
+        for (const auto instance : s_instances) {
+            if (instance->wnd_edit)
+                uSendMessage(instance->wnd_edit, WM_SETFONT, 0, MAKELPARAM(0, 0));
         }
-        DeleteObject(g_font);
+        s_font.reset();
     }
 
-    g_font = CreateFontIndirect(&cfg_font.get_value());
+    s_font.reset(CreateFontIndirect(&cfg_font.get_value()));
 
-    unsigned n, count = quickfind_window::list_wnd.get_count();
-    for (n = 0; n < count; n++) {
-        HWND wnd = quickfind_window::list_wnd[n]->wnd_edit;
-        if (wnd) {
-            uSendMessage(wnd, WM_SETFONT, (WPARAM)g_font, MAKELPARAM(1, 0));
-        }
+    for (const auto instance : s_instances) {
+        if (instance->wnd_edit)
+            uSendMessage(instance->wnd_edit, WM_SETFONT, reinterpret_cast<WPARAM>(s_font.get()), MAKELPARAM(1, 0));
     }
 }
 
-quickfind_window::quickfind_window()
-    : wnd_edit(0)
+TypefindWindow::TypefindWindow()
+    : m_initialised(false)
+    , m_editproc(nullptr)
     , m_is_running(false)
-    , m_initialised(false)
-    , m_editproc(0)
-    , m_pattern(cfg_default_search)
     , height(0)
-    , wnd_prev(0)
+    , m_pattern(cfg_default_search)
     , m_mode(cfg_default_search_mode)
+    , wnd_edit(nullptr)
+    , wnd_prev(nullptr)
 {
 }
 
-quickfind_window::~quickfind_window() {}
-
-void quickfind_window::update_all_window_frames()
+void TypefindWindow::s_update_all_window_frames()
 {
-    unsigned n, count = list_wnd.get_count();
     long flags = 0;
     if (cfg_frame == 1)
         flags |= WS_EX_CLIENTEDGE;
     if (cfg_frame == 2)
         flags |= WS_EX_STATICEDGE;
 
-    for (n = 0; n < count; n++) {
-        HWND wnd = list_wnd[n]->wnd_edit;
+    for (auto instance : s_instances) {
+        HWND wnd = instance->wnd_edit;
         if (wnd) {
             SetWindowLongPtr(wnd, GWL_EXSTYLE, flags);
-            SetWindowPos(wnd, 0, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+            SetWindowPos(wnd, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
         }
     }
 }
 
-void quickfind_window::on_size(unsigned cx, unsigned cy)
+void TypefindWindow::s_activate()
 {
-    SetWindowPos(wnd_edit, 0, 0, 0, cx, height, SWP_NOZORDER);
+    if (s_instances.empty()) {
+        win32_helpers::message_box(
+            core_api::get_main_window(), L"Please insert a Typefind window into a host", L"Error", MB_OK);
+    } else {
+        s_instances[0]->activate();
+    }
 }
-void quickfind_window::on_size()
+
+void TypefindWindow::on_size(unsigned cx, unsigned cy)
+{
+    SetWindowPos(wnd_edit, nullptr, 0, 0, cx, height, SWP_NOZORDER);
+}
+
+void TypefindWindow::on_size()
 {
     RECT rc;
     GetWindowRect(get_wnd(), &rc);
     on_size(RECT_CX(rc), RECT_CY(rc));
 }
 
-LRESULT quickfind_window::on_message(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
+LRESULT TypefindWindow::on_message(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     switch (msg) {
     case WM_CREATE: {
-        list_wnd.add_item(this);
+        s_instances.emplace_back(this);
 
         m_initialised = true;
 
@@ -120,20 +120,20 @@ LRESULT quickfind_window::on_message(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
         m_search.set_mode(m_mode);
 
         wnd_edit = CreateWindowEx(flags, WC_EDIT, _T(""), WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL, 0, 0, 0,
-            0, wnd, HMENU(IDC_TREE), core_api::get_my_instance(), NULL);
+            0, wnd, HMENU(IDC_TREE), core_api::get_my_instance(), nullptr);
 
         if (wnd_edit) {
-            if (g_font) {
-                uSendMessage(wnd_edit, WM_SETFONT, (WPARAM)g_font, MAKELPARAM(0, 0));
+            if (s_font) {
+                uSendMessage(wnd_edit, WM_SETFONT, reinterpret_cast<WPARAM>(s_font.get()), MAKELPARAM(0, 0));
             } else
-                g_update_all_fonts();
+                s_update_all_fonts();
 
-            SetWindowLongPtr(wnd_edit, GWL_USERDATA, (LPARAM)(this));
-            m_editproc = (WNDPROC)SetWindowLongPtr(wnd_edit, GWL_WNDPROC, (LPARAM)(hook_proc));
+            SetWindowLongPtr(wnd_edit, GWLP_USERDATA, reinterpret_cast<LPARAM>(this));
+            m_editproc = (WNDPROC)SetWindowLongPtr(wnd_edit, GWLP_WNDPROC, reinterpret_cast<LPARAM>(hook_proc));
         }
     } break;
     case WM_GETMINMAXINFO: {
-        LPMINMAXINFO mmi = LPMINMAXINFO(lp);
+        const auto mmi = reinterpret_cast<LPMINMAXINFO>(lp);
         mmi->ptMinTrackSize.y = height;
         mmi->ptMaxTrackSize.y = height;
         return 0;
@@ -154,12 +154,11 @@ LRESULT quickfind_window::on_message(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
         }
         break;
     case WM_DESTROY:
-        wnd_edit = 0;
+        wnd_edit = nullptr;
         if (m_initialised) {
-            list_wnd.remove_item(this);
-            if (list_wnd.get_count() == 0) {
-                DeleteFont(g_font);
-                g_font = 0;
+            std::erase(s_instances, this);
+            if (s_instances.empty()) {
+                s_font.reset();
             }
             m_initialised = false;
             modeless_dialog_manager::g_remove(wnd);
@@ -169,19 +168,19 @@ LRESULT quickfind_window::on_message(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
     return uDefWindowProc(wnd, msg, wp, lp);
 }
 
-LRESULT WINAPI quickfind_window::hook_proc(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
+LRESULT WINAPI TypefindWindow::hook_proc(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 {
-    quickfind_window* p_this;
+    TypefindWindow* p_this;
     LRESULT rv;
 
-    p_this = reinterpret_cast<quickfind_window*>(GetWindowLongPtr(wnd, GWL_USERDATA));
+    p_this = reinterpret_cast<TypefindWindow*>(GetWindowLongPtr(wnd, GWLP_USERDATA));
 
     rv = p_this ? p_this->on_hook(wnd, msg, wp, lp) : uDefWindowProc(wnd, msg, wp, lp);
 
     return rv;
 }
 
-LRESULT WINAPI quickfind_window::on_hook(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
+LRESULT WINAPI TypefindWindow::on_hook(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     switch (msg) {
     case WM_KEYDOWN:
@@ -190,7 +189,7 @@ LRESULT WINAPI quickfind_window::on_hook(HWND wnd, UINT msg, WPARAM wp, LPARAM l
         } else if (m_search.on_key(wp))
             return 0;
         else if (wp == VK_DELETE) {
-            LRESULT ret = CallWindowProc(m_editproc, wnd, msg, wp, lp);
+            const LRESULT ret = CallWindowProc(m_editproc, wnd, msg, wp, lp);
             m_search.set_string(uGetWindowText(wnd));
             return ret;
         }
@@ -209,18 +208,19 @@ LRESULT WINAPI quickfind_window::on_hook(HWND wnd, UINT msg, WPARAM wp, LPARAM l
             return 0;
         else if (!ctrl_down) {
             // assert (wp != VK_DELETE);
-            unsigned start, end;
-            SendMessage(wnd, EM_GETSEL, (WPARAM)&start, (LPARAM)&end);
+            unsigned start{};
+            unsigned end{};
+            SendMessage(wnd, EM_GETSEL, reinterpret_cast<WPARAM>(&start), reinterpret_cast<LPARAM>(&end));
             if (wp == VK_BACK || start != end || end != uSendMessage(wnd, WM_GETTEXTLENGTH, 0, 0)) {
-                LRESULT ret = uCallWindowProc(m_editproc, wnd, msg, wp, lp);
+                const LRESULT ret = CallWindowProc(m_editproc, wnd, msg, wp, lp);
                 m_search.set_string(uGetWindowText(wnd));
                 return ret;
             }
-            m_search.add_char(wp);
+            m_search.add_char(gsl::narrow<unsigned>(wp));
         }
     } break;
     case WM_SETFOCUS:
-        wnd_prev = (HWND)wp;
+        wnd_prev = reinterpret_cast<HWND>(wp);
         if (height == 0)
             activate(false);
         break;
@@ -245,23 +245,23 @@ LRESULT WINAPI quickfind_window::on_hook(HWND wnd, UINT msg, WPARAM wp, LPARAM l
     return uCallWindowProc(m_editproc, wnd, msg, wp, lp);
 }
 
-void quickfind_window::get_config(stream_writer* p_out, abort_callback& p_abort) const
+void TypefindWindow::get_config(stream_writer* p_out, abort_callback& p_abort) const
 {
     p_out->write_lendian_t(t_uint32(stream_version_current), p_abort);
     p_out->write_string(m_pattern, p_abort);
     p_out->write_lendian_t(m_mode, p_abort);
 }
 
-void quickfind_window::get_name(pfc::string_base& out) const
+void TypefindWindow::get_name(pfc::string_base& out) const
 {
     out.set_string("Typefind");
 }
-void quickfind_window::get_category(pfc::string_base& out) const
+void TypefindWindow::get_category(pfc::string_base& out) const
 {
     out.set_string("Toolbars");
 }
 
-void quickfind_window::set_config(stream_reader* p_source, t_size p_size, abort_callback& p_abort)
+void TypefindWindow::set_config(stream_reader* p_source, size_t p_size, abort_callback& p_abort)
 {
     if (p_size) {
         t_uint32 version;
@@ -274,10 +274,10 @@ void quickfind_window::set_config(stream_reader* p_source, t_size p_size, abort_
 }
 
 // {89A3759F-348A-4e3f-BF43-3D16BC059186}
-const GUID quickfind_window::extension_guid
+const GUID TypefindWindow::extension_guid
     = {0x89a3759f, 0x348a, 0x4e3f, {0xbf, 0x43, 0x3d, 0x16, 0xbc, 0x5, 0x91, 0x86}};
 
-INT_PTR quickfind_window::ConfigPopupProc(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
+INT_PTR TypefindWindow::ConfigPopupProc(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     switch (msg) {
     case WM_INITDIALOG: {
@@ -322,52 +322,41 @@ INT_PTR quickfind_window::ConfigPopupProc(HWND wnd, UINT msg, WPARAM wp, LPARAM 
     }
 }
 
-bool quickfind_window::show_config_popup(HWND wnd_parent)
+bool TypefindWindow::show_config_popup(HWND wnd_parent)
 {
     return uih::modal_dialog_box(IDD_CONFIG, wnd_parent, [this, self = ptr{this}](auto&&... args) {
         return ConfigPopupProc(std::forward<decltype(args)>(args)...);
     }) != 0;
 }
 
-ui_extension::window_factory<quickfind_window> blah;
+ui_extension::window_factory<TypefindWindow> blah;
 
-class menu_item_impl_typefind : public mainmenu_commands {
-    virtual t_uint32 get_command_count() { return 1; }
-    virtual GUID get_command(t_uint32 p_index)
+class TypefindMenuItem : public mainmenu_commands {
+    t_uint32 get_command_count() override { return 1; }
+
+    GUID get_command(t_uint32 p_index) override
     {
-        // {44D7861A-DFD8-4a44-8E6A-1738ED3E3ED5}
-        static const GUID rv = {0x44d7861a, 0xdfd8, 0x4a44, {0x8e, 0x6a, 0x17, 0x38, 0xed, 0x3e, 0x3e, 0xd5}};
-        return rv;
+        return {0x44d7861a, 0xdfd8, 0x4a44, {0x8e, 0x6a, 0x17, 0x38, 0xed, 0x3e, 0x3e, 0xd5}};
     }
-    virtual void get_name(t_uint32 p_index, pfc::string_base& p_out) { p_out = "Type-find"; }
-    virtual bool get_description(t_uint32 p_index, pfc::string_base& p_out)
+
+    void get_name(t_uint32 p_index, pfc::string_base& p_out) override { p_out = "Type-find"; }
+
+    bool get_description(t_uint32 p_index, pfc::string_base& p_out) override
     {
         p_out = "Activates type-find";
         return true;
     }
-    virtual GUID get_parent() { return mainmenu_groups::edit_part2; }
-    virtual t_uint32 get_sort_priority() { return sort_priority_dontcare; }
-    virtual bool get_display(t_uint32 p_index, pfc::string_base& p_text, t_uint32& p_flags)
+
+    GUID get_parent() override { return mainmenu_groups::edit_part2; }
+    t_uint32 get_sort_priority() override { return sort_priority_dontcare; }
+
+    bool get_display(t_uint32 p_index, pfc::string_base& p_text, t_uint32& p_flags) override
     {
         p_flags = 0;
         return false;
-        /*
-        if (quickfind_window::list_wnd.get_count())
-        {
-            get_name(p_index,p_text);
-            return true;
-        }
-        else return false;
-        */
     }
-    virtual void execute(t_uint32 p_index, service_ptr_t<service_base> p_callback)
-    {
-        if (quickfind_window::list_wnd.get_count()) {
-            quickfind_window::list_wnd[0]->activate();
-        } else
-            win32_helpers::message_box(
-                core_api::get_main_window(), _T("Please insert a typefind window into a host"), _T("Error"), MB_OK);
-    }
+
+    void execute(t_uint32 p_index, service_ptr_t<service_base> p_callback) override { TypefindWindow::s_activate(); }
 };
 
-mainmenu_commands_factory_t<menu_item_impl_typefind> g_menu;
+mainmenu_commands_factory_t<TypefindMenuItem> g_menu;
