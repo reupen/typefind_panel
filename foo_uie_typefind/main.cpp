@@ -11,25 +11,32 @@ DECLARE_COMPONENT_VERSION("Typefind",
 
 );
 
+constexpr GUID font_client_id = {0xc491b147, 0x91ea, 0x4247, {0x9e, 0x14, 0x3c, 0xde, 0x4e, 0xcc, 0xb0, 0xd}};
+
 cfg_int cfg_frame(GUID{0x05550547, 0xbf98, 0x088c, {0xbe, 0x0e, 0x24, 0x95, 0xe4, 0x9b, 0x88, 0xc7}}, 2);
 
-static LOGFONT get_def_font()
-{
-    LOGFONT foo;
-    uGetMenuFont(&foo);
-    return foo;
-}
-
-static cfg_struct_t<LOGFONT> cfg_font(
-    GUID{0xb2c703ed, 0x5a98, 0xfb67, {0x82, 0xa0, 0xfd, 0x1a, 0x44, 0xeb, 0xd5, 0x47}}, get_def_font());
-
-// {4E16A134-1270-4051-9C4F-771819D4CAD2}
-static const GUID guid_default_search_mode
+constexpr GUID guid_default_search_mode
     = {0x4e16a134, 0x1270, 0x4051, {0x9c, 0x4f, 0x77, 0x18, 0x19, 0xd4, 0xca, 0xd2}};
 
 cfg_string cfg_default_search(
     GUID{0xe6e375cd, 0x6b89, 0x5fc8, {0x3f, 0xec, 0xce, 0xf4, 0x8b, 0xdc, 0x94, 0xcf}}, "%artist% - %title%");
 cfg_int_t<t_uint32> cfg_default_search_mode(guid_default_search_mode, 0);
+
+namespace {
+
+class FontClient : public cui::fonts::client {
+public:
+    const GUID& get_client_guid() const override { return font_client_id; }
+
+    void get_name(pfc::string_base& p_out) const override { p_out = "Typefind"; }
+
+    cui::fonts::font_type_t get_default_font_type() const override { return cui::fonts::font_type_items; }
+
+    void on_font_changed() const override { TypefindWindow::s_update_all_fonts(); }
+};
+
+FontClient::factory<FontClient> g_font_client_album_list;
+} // namespace
 
 void TypefindWindow::s_update_all_fonts()
 {
@@ -41,7 +48,7 @@ void TypefindWindow::s_update_all_fonts()
         s_font.reset();
     }
 
-    s_font.reset(CreateFontIndirect(&cfg_font.get_value()));
+    s_font.reset(cui::fonts::helper(font_client_id).get_font());
 
     for (const auto instance : s_instances) {
         if (instance->wnd_edit)

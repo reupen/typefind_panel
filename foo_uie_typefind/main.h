@@ -20,7 +20,8 @@
 #include "resource.h"
 #include "progressive_search.h"
 
-class TypefindWindow : public uie::container_uie_window_v3 {
+using namespace uih::literals::spx;
+
 public:
     LRESULT on_message(HWND wnd, UINT msg, WPARAM wp, LPARAM lp) override;
 
@@ -55,7 +56,7 @@ public:
     {
         // if (GetFocus() != wnd_edit)
         {
-            height = uGetFontHeight(s_font.get()) + 2;
+            height = uih::get_font_height(s_font.get()) + 2_spx;
             if (b_focus) {
                 SetFocus(wnd_edit);
             }
