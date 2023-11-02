@@ -93,7 +93,7 @@ private:
     bool m_initialised;
     WNDPROC m_editproc;
     bool m_is_running;
-    progressive_search m_search;
+    ProgressiveSearch m_search;
     unsigned height;
     pfc::string8 m_pattern;
     t_uint32 m_mode;
