@@ -1,12 +1,12 @@
 {
   "name": "typefind-panel",
   "version-string": "git",
-  "builtin-baseline": "a7b6122f6b6504d16d96117336a0562693579933",
+  "builtin-baseline": "8eb57355a4ffb410a2e94c07b4dca2dffbee8e50",
   "dependencies": ["fmt", "ms-gsl", "range-v3", "wil"],
   "overrides": [
     {
       "name": "fmt",
-      "version": "9.1.0#1"
+      "version": "10.1.1"
     },
     {
       "name": "ms-gsl",
@@ -18,7 +18,7 @@
     },
     {
       "name": "wil",
-      "version": "2023-02-02"
+      "version": "2023-08-24#1"
     }
   ]
 }

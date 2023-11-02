@@ -12,7 +12,7 @@
 #define IDD_PROGRESS                    104
 #define IDD_EDIT_VIEW                   105
 #define IDD_CONFIG                      105
-#define IDC_TREE                        1000
+#define IDC_EDIT                        1000
 #define IDC_HIERARCHY                   1002
 #define IDC_SORT_SPEC                   1003
 #define IDC_SORT_ORDER                  1003

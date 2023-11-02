@@ -12,6 +12,8 @@
 #include <Windows.h>
 #include <windowsx.h>
 
+#include <wil/win32_helpers.h>
+
 #include "../foobar2000/SDK/foobar2000.h"
 
 #include "../columns_ui-sdk/ui_extension.h"
@@ -22,6 +24,8 @@
 #include "progressive_search.h"
 
 using namespace uih::literals::spx;
+
+namespace typefind_panel {
 
 class ColourNotifier final : cui::colours::common_callback {
 public:
@@ -62,12 +66,6 @@ private:
 
 class TypefindWindow : public uie::container_uie_window_v3 {
 public:
-    LRESULT on_message(HWND wnd, UINT msg, WPARAM wp, LPARAM lp) override;
-
-    LRESULT WINAPI on_hook(HWND wnd, UINT msg, WPARAM wp, LPARAM lp);
-    static LRESULT WINAPI hook_proc(HWND wnd, UINT msg, WPARAM wp, LPARAM lp);
-    INT_PTR ConfigPopupProc(HWND wnd, UINT msg, WPARAM wp, LPARAM lp);
-
     TypefindWindow();
 
     static void s_update_all_fonts();
@@ -96,10 +94,10 @@ public:
         {
             height = uih::get_font_height(s_font.get()) + 2_spx;
             if (b_focus) {
-                SetFocus(wnd_edit);
+                SetFocus(m_wnd_edit);
             }
-            uSendMessage(wnd_edit, EM_SETSEL, 0, -1);
-            const auto text = uGetWindowText(wnd_edit);
+            SendMessage(m_wnd_edit, EM_SETSEL, 0, -1);
+            const auto text = uGetWindowText(m_wnd_edit);
             m_search.init();
             if (text.length())
                 m_search.set_string(text);
@@ -108,7 +106,7 @@ public:
             on_size();
         }
     }
-    void on_size(unsigned cx, unsigned cy);
+    void on_size(int cx, int cy);
     void on_size();
 
     bool have_config_popup() const override { return true; }
@@ -124,21 +122,31 @@ public:
     friend class font_notify;
 
 private:
+    static LRESULT WINAPI s_handle_hooked_edit_message(HWND wnd, UINT msg, WPARAM wp, LPARAM lp);
+
+    LRESULT on_message(HWND wnd, UINT msg, WPARAM wp, LPARAM lp) override;
+    LRESULT WINAPI handle_hooked_edit_message(HWND wnd, UINT msg, WPARAM wp, LPARAM lp);
+    INT_PTR handle_config_dialog_message(HWND wnd, UINT msg, WPARAM wp, LPARAM lp);
+
+    void set_window_theme() const;
+
+    constexpr static short ID_EDIT = 1001;
+
     inline static wil::unique_hfont s_font;
     inline static wil::unique_hbrush s_background_brush;
     inline static std::vector<TypefindWindow*> s_instances;
 
-    void set_window_theme() const;
-
-    HWND wnd_edit;
-    HWND wnd_prev;
-    bool m_initialised;
-    WNDPROC m_editproc;
-    bool m_is_running;
+    HWND m_wnd_edit{};
+    HWND m_wnd_previous_focus{};
+    bool m_initialised{};
+    WNDPROC m_editproc{};
+    bool m_is_running{};
+    int height{};
+    t_uint32 m_mode{};
     ProgressiveSearch m_search;
-    unsigned height;
     pfc::string8 m_pattern;
-    t_uint32 m_mode;
     std::unique_ptr<ColourNotifier> m_colours_notifier;
     modal_dialog_scope m_config_scope;
 };
+
+} // namespace typefind_panel

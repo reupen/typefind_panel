@@ -3,6 +3,8 @@
 
 #include <ranges>
 
+namespace typefind_panel {
+
 enum t_search_mode {
     mode_pattern_beginning = 0,
     mode_query = 1,
@@ -204,3 +206,5 @@ private:
     pfc::array_t<pfc::string_simple> m_formatted;
 #endif
 };
+
+} // namespace typefind_panel
