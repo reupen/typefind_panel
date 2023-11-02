@@ -7,19 +7,19 @@
 //
 // Generated from the TEXTINCLUDE 2 resource.
 //
-#include "afxres.h"
+#define APSTUDIO_HIDDEN_SYMBOLS
+#include "windows.h"
+#undef APSTUDIO_HIDDEN_SYMBOLS
 
 /////////////////////////////////////////////////////////////////////////////
 #undef APSTUDIO_READONLY_SYMBOLS
 
 /////////////////////////////////////////////////////////////////////////////
-// English (U.S.) resources
+// English (United States) resources
 
 #if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
-#ifdef _WIN32
 LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 #pragma code_page(1252)
-#endif //_WIN32
 
 #ifdef APSTUDIO_INVOKED
 /////////////////////////////////////////////////////////////////////////////
@@ -34,7 +34,9 @@ END
 
 2 TEXTINCLUDE 
 BEGIN
-    "#include ""afxres.h""\r\n"
+    "#define APSTUDIO_HIDDEN_SYMBOLS\r\n"
+    "#include ""windows.h""\r\n"
+    "#undef APSTUDIO_HIDDEN_SYMBOLS\r\n"
     "\0"
 END
 
@@ -46,35 +48,33 @@ END
 
 #endif    // APSTUDIO_INVOKED
 
-#endif    // English (U.S.) resources
+#endif    // English (United States) resources
 /////////////////////////////////////////////////////////////////////////////
 
 
 /////////////////////////////////////////////////////////////////////////////
-// English (U.K.) resources
+// English (United Kingdom) resources
 
 #if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENG)
-#ifdef _WIN32
 LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_UK
 #pragma code_page(1252)
-#endif //_WIN32
 
 /////////////////////////////////////////////////////////////////////////////
 //
 // Dialog
 //
 
-IDD_CONFIG DIALOGEX 0, 0, 320, 122
+IDD_CONFIG DIALOGEX 0, 0, 320, 145
 STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Typefind config"
 FONT 8, "Tahoma", 0, 0, 0x0
 BEGIN
-    RTEXT           "Search string:",IDC_STATIC,2,20,46,8
-    EDITTEXT        IDC_VALUE,2,32,314,68,ES_MULTILINE | WS_VSCROLL
-    DEFPUSHBUTTON   "OK",IDOK,211,104,50,14
-    PUSHBUTTON      "Cancel",IDCANCEL,266,104,50,14
-    COMBOBOX        IDC_MODE,57,2,259,15,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    RTEXT           "Search mode:",IDC_STATIC,2,2,45,8
+    LTEXT           "Title formatting pattern",IDC_STATIC,7,39,101,8
+    EDITTEXT        IDC_VALUE,7,50,306,65,ES_MULTILINE | WS_VSCROLL
+    DEFPUSHBUTTON   "OK",IDOK,211,124,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,263,124,50,14
+    COMBOBOX        IDC_MODE,7,18,306,15,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Search mode",IDC_STATIC,7,7,51,8
 END
 
 
@@ -84,19 +84,30 @@ END
 //
 
 #ifdef APSTUDIO_INVOKED
-GUIDELINES DESIGNINFO 
+GUIDELINES DESIGNINFO
 BEGIN
     IDD_CONFIG, DIALOG
     BEGIN
-        LEFTMARGIN, 2
-        RIGHTMARGIN, 316
-        TOPMARGIN, 2
-        BOTTOMMARGIN, 118
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 313
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 138
     END
 END
 #endif    // APSTUDIO_INVOKED
 
-#endif    // English (U.K.) resources
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// AFX_DIALOG_LAYOUT
+//
+
+IDD_CONFIG AFX_DIALOG_LAYOUT
+BEGIN
+    0
+END
+
+#endif    // English (United Kingdom) resources
 /////////////////////////////////////////////////////////////////////////////
 
 

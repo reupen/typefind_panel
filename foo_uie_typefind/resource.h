@@ -12,7 +12,7 @@
 #define IDD_PROGRESS                    104
 #define IDD_EDIT_VIEW                   105
 #define IDD_CONFIG                      105
-#define IDC_TREE                        1000
+#define IDC_EDIT                        1000
 #define IDC_HIERARCHY                   1002
 #define IDC_SORT_SPEC                   1003
 #define IDC_SORT_ORDER                  1003
@@ -70,6 +70,10 @@
 #define IDC_MODE                        1037
 #define IDC_TAB1                        1039
 #define IDC_ADD_ITEMS_USE_CORE_SORT     1041
+
+#ifndef IDC_STATIC
+#define IDC_STATIC				        -1
+#endif
 
 // Next default values for new objects
 // 
