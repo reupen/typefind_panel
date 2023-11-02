@@ -1,4 +1,4 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.7.34221.43
@@ -18,6 +18,11 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "columns_ui_sdk", "..\columns_ui-sdk\columns_ui-sdk.vcxproj", "{93EC0EDE-01CD-4FB0-B8E8-4F2A027E026E}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "foo_uie_typefind", "..\foo_uie_typefind\foo_uie_typefind.vcxproj", "{8C78A776-3035-40A3-9A5D-6D049B12D8AB}"
+	ProjectSection(ProjectDependencies) = postProject
+		{84D30275-D3D7-4867-82D2-8031A53DCE20} = {84D30275-D3D7-4867-82D2-8031A53DCE20}
+		{C90A19C3-554D-4037-B4D3-BD12C1F1AD86} = {C90A19C3-554D-4037-B4D3-BD12C1F1AD86}
+		{EBFFFB4E-261D-44D3-B89C-957B31A0BF9C} = {EBFFFB4E-261D-44D3-B89C-957B31A0BF9C}
+	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{0FF158B9-F515-4DCF-B879-3D38EEC6DA2C}"
 	ProjectSection(SolutionItems) = preProject
@@ -44,6 +49,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{
 	ProjectSection(SolutionItems) = preProject
 		..\.github\workflows\build.yml = ..\.github\workflows\build.yml
 	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "fbh", "..\fbh\fbh.vcxproj", "{84D30275-D3D7-4867-82D2-8031A53DCE20}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -109,6 +116,14 @@ Global
 		{A8C4298D-00F5-46F7-91BA-F503FD581590}.Release|Win32.Build.0 = Release|Win32
 		{A8C4298D-00F5-46F7-91BA-F503FD581590}.Release|x64.ActiveCfg = Release|x64
 		{A8C4298D-00F5-46F7-91BA-F503FD581590}.Release|x64.Build.0 = Release|x64
+		{84D30275-D3D7-4867-82D2-8031A53DCE20}.Debug|Win32.ActiveCfg = Debug|Win32
+		{84D30275-D3D7-4867-82D2-8031A53DCE20}.Debug|Win32.Build.0 = Debug|Win32
+		{84D30275-D3D7-4867-82D2-8031A53DCE20}.Debug|x64.ActiveCfg = Debug|x64
+		{84D30275-D3D7-4867-82D2-8031A53DCE20}.Debug|x64.Build.0 = Debug|x64
+		{84D30275-D3D7-4867-82D2-8031A53DCE20}.Release|Win32.ActiveCfg = Release|Win32
+		{84D30275-D3D7-4867-82D2-8031A53DCE20}.Release|Win32.Build.0 = Release|Win32
+		{84D30275-D3D7-4867-82D2-8031A53DCE20}.Release|x64.ActiveCfg = Release|x64
+		{84D30275-D3D7-4867-82D2-8031A53DCE20}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -123,6 +138,7 @@ Global
 		{A8C4298D-00F5-46F7-91BA-F503FD581590} = {38638DCE-8BF7-44F1-ABA5-6EFD1B6C4922}
 		{BB93443D-9F56-4F55-9629-CE361DA06E12} = {0FF158B9-F515-4DCF-B879-3D38EEC6DA2C}
 		{4E5ECE58-62FB-42DD-AD68-9205BC163C4B} = {BB93443D-9F56-4F55-9629-CE361DA06E12}
+		{84D30275-D3D7-4867-82D2-8031A53DCE20} = {38638DCE-8BF7-44F1-ABA5-6EFD1B6C4922}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {4D18E986-3B91-49F8-AD32-6AD559C969B6}

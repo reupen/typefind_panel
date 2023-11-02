@@ -16,12 +16,51 @@
 
 #include "../columns_ui-sdk/ui_extension.h"
 #include "../ui_helpers/stdafx.h"
+#include "../fbh/stdafx.h"
 
 #include "resource.h"
 #include "progressive_search.h"
 
 using namespace uih::literals::spx;
 
+class ColourNotifier final : cui::colours::common_callback {
+public:
+    ColourNotifier(std::function<void()> on_dark_mode_change, std::function<void()> on_colours_change)
+        : m_on_dark_mode_change(std::move(on_dark_mode_change))
+        , m_on_colours_change(std::move(on_colours_change))
+    {
+        if (fb2k::std_api_try_get(m_api)) {
+            m_api->register_common_callback(this);
+        }
+    }
+
+    ~ColourNotifier()
+    {
+        if (m_api.is_valid()) {
+            m_api->deregister_common_callback(this);
+        }
+    }
+
+    void on_colour_changed(uint32_t changed_items_mask) const override
+    {
+        if (changed_items_mask & (cui::colours::colour_flag_text | cui::colours::colour_flag_background)) {
+            m_on_colours_change();
+        }
+    }
+
+    void on_bool_changed(uint32_t changed_items_mask) const override
+    {
+        if (changed_items_mask & cui::colours::bool_flag_dark_mode_enabled)
+            m_on_dark_mode_change();
+    }
+
+private:
+    std::function<void()> m_on_dark_mode_change;
+    std::function<void()> m_on_colours_change;
+    cui::colours::manager::ptr m_api;
+};
+
+class TypefindWindow : public uie::container_uie_window_v3 {
 public:
     LRESULT on_message(HWND wnd, UINT msg, WPARAM wp, LPARAM lp) override;
 
@@ -32,7 +71,6 @@ public:
     TypefindWindow();
 
     static void s_update_all_fonts();
-    static void s_update_all_window_frames();
     static void s_activate();
 
     static const GUID extension_guid;
@@ -87,7 +125,10 @@ public:
 
 private:
     inline static wil::unique_hfont s_font;
+    inline static wil::unique_hbrush s_background_brush;
     inline static std::vector<TypefindWindow*> s_instances;
+
+    void set_window_theme() const;
 
     HWND wnd_edit;
     HWND wnd_prev;
@@ -98,6 +139,6 @@ private:
     unsigned height;
     pfc::string8 m_pattern;
     t_uint32 m_mode;
-
+    std::unique_ptr<ColourNotifier> m_colours_notifier;
     modal_dialog_scope m_config_scope;
 };

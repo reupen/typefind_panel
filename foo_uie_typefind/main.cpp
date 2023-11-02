@@ -13,8 +13,6 @@ DECLARE_COMPONENT_VERSION("Typefind",
 
 constexpr GUID font_client_id = {0xc491b147, 0x91ea, 0x4247, {0x9e, 0x14, 0x3c, 0xde, 0x4e, 0xcc, 0xb0, 0xd}};
 
-cfg_int cfg_frame(GUID{0x05550547, 0xbf98, 0x088c, {0xbe, 0x0e, 0x24, 0x95, 0xe4, 0x9b, 0x88, 0xc7}}, 2);
-
 constexpr GUID guid_default_search_mode
     = {0x4e16a134, 0x1270, 0x4051, {0x9c, 0x4f, 0x77, 0x18, 0x19, 0xd4, 0xca, 0xd2}};
 
@@ -68,23 +66,6 @@ TypefindWindow::TypefindWindow()
 {
 }
 
-void TypefindWindow::s_update_all_window_frames()
-{
-    long flags = 0;
-    if (cfg_frame == 1)
-        flags |= WS_EX_CLIENTEDGE;
-    if (cfg_frame == 2)
-        flags |= WS_EX_STATICEDGE;
-
-    for (auto instance : s_instances) {
-        HWND wnd = instance->wnd_edit;
-        if (wnd) {
-            SetWindowLongPtr(wnd, GWL_EXSTYLE, flags);
-            SetWindowPos(wnd, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
-        }
-    }
-}
-
 void TypefindWindow::s_activate()
 {
     if (s_instances.empty()) {
@@ -117,17 +98,12 @@ LRESULT TypefindWindow::on_message(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 
         modeless_dialog_manager::g_add(wnd);
 
-        long flags = 0;
-        if (cfg_frame == 1)
-            flags |= WS_EX_CLIENTEDGE;
-        else if (cfg_frame == 2)
-            flags |= WS_EX_STATICEDGE;
-
         m_search.set_pattern(m_pattern);
         m_search.set_mode(m_mode);
 
-        wnd_edit = CreateWindowEx(flags, WC_EDIT, _T(""), WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL, 0, 0, 0,
-            0, wnd, HMENU(IDC_TREE), core_api::get_my_instance(), nullptr);
+        wnd_edit
+            = CreateWindowEx(WS_EX_CLIENTEDGE, WC_EDIT, _T(""), WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL, 0,
+                0, 0, 0, wnd, HMENU(IDC_TREE), core_api::get_my_instance(), nullptr);
 
         if (wnd_edit) {
             if (s_font) {
@@ -137,6 +113,13 @@ LRESULT TypefindWindow::on_message(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 
             SetWindowLongPtr(wnd_edit, GWLP_USERDATA, reinterpret_cast<LPARAM>(this));
             m_editproc = (WNDPROC)SetWindowLongPtr(wnd_edit, GWLP_WNDPROC, reinterpret_cast<LPARAM>(hook_proc));
+
+            set_window_theme();
+            m_colours_notifier = std::make_unique<ColourNotifier>([this, self = ptr{this}] { set_window_theme(); },
+                [this, self = ptr{this}] {
+                    s_background_brush.reset();
+                    RedrawWindow(wnd_edit, nullptr, nullptr, RDW_INVALIDATE);
+                });
         }
     } break;
     case WM_GETMINMAXINFO: {
@@ -160,12 +143,26 @@ LRESULT TypefindWindow::on_message(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
             return 0;
         }
         break;
+    case WM_CTLCOLOREDIT:
+    case WM_CTLCOLORSTATIC: {
+        cui::colours::helper colours;
+        const auto dc = reinterpret_cast<HDC>(wp);
+        SetTextColor(dc, colours.get_colour(cui::colours::colour_text));
+        SetBkMode(dc, TRANSPARENT);
+
+        if (!s_background_brush)
+            s_background_brush.reset(CreateSolidBrush(colours.get_colour(cui::colours::colour_background)));
+
+        return reinterpret_cast<LPARAM>(s_background_brush.get());
+    }
     case WM_DESTROY:
+        m_colours_notifier.reset();
         wnd_edit = nullptr;
         if (m_initialised) {
             std::erase(s_instances, this);
             if (s_instances.empty()) {
                 s_font.reset();
+                s_background_brush.reset();
             }
             m_initialised = false;
             modeless_dialog_manager::g_remove(wnd);
@@ -331,9 +328,18 @@ INT_PTR TypefindWindow::ConfigPopupProc(HWND wnd, UINT msg, WPARAM wp, LPARAM lp
 
 bool TypefindWindow::show_config_popup(HWND wnd_parent)
 {
-    return uih::modal_dialog_box(IDD_CONFIG, wnd_parent, [this, self = ptr{this}](auto&&... args) {
+    return fbh::auto_dark_modal_dialog_box(IDD_CONFIG, wnd_parent, [this, self = ptr{this}](auto&&... args) {
         return ConfigPopupProc(std::forward<decltype(args)>(args)...);
     }) != 0;
+}
+
+void TypefindWindow::set_window_theme() const
+{
+    if (!wnd_edit)
+        return;
+
+    const auto is_dark = cui::colours::is_dark_mode_active();
+    SetWindowTheme(wnd_edit, is_dark ? L"DarkMode_Explorer" : nullptr, nullptr);
 }
 
 ui_extension::window_factory<TypefindWindow> blah;
