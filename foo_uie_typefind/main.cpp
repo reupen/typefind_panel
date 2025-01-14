@@ -62,8 +62,8 @@ TypefindWindow::TypefindWindow() : m_pattern(cfg_default_search), m_mode(cfg_def
 void TypefindWindow::s_activate()
 {
     if (s_instances.empty()) {
-        win32_helpers::message_box(
-            core_api::get_main_window(), L"Please insert a Typefind window into a host", L"Error", MB_OK);
+        fbh::show_info_box_modeless(core_api::get_main_window(), "Error",
+            "Please insert a Typefind window into a host.", uih::InfoBoxType::Information);
     } else {
         s_instances[0]->activate();
     }
