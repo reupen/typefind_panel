@@ -41,23 +41,16 @@ FontClient::factory<FontClient> g_font_client_album_list;
 
 void TypefindWindow::s_update_all_fonts()
 {
-    if (s_font != nullptr) {
-        for (const auto instance : s_instances) {
-            if (instance->m_wnd_edit)
-                SendMessage(instance->m_wnd_edit, WM_SETFONT, 0, MAKELPARAM(0, 0));
-        }
-        s_font.reset();
-    }
-
+    const auto old_font = std::move(s_font);
     s_font.reset(cui::fonts::helper(font_client_id).get_font());
 
     for (const auto instance : s_instances) {
         if (instance->m_wnd_edit)
-            SendMessage(instance->m_wnd_edit, WM_SETFONT, reinterpret_cast<WPARAM>(s_font.get()), MAKELPARAM(1, 0));
+            SetWindowFont(instance->m_wnd_edit, s_font.get(), TRUE);
     }
 }
 
-TypefindWindow::TypefindWindow() : m_pattern(cfg_default_search), m_mode(cfg_default_search_mode) {}
+TypefindWindow::TypefindWindow() : m_mode(cfg_default_search_mode), m_pattern(cfg_default_search.get()) {}
 
 void TypefindWindow::s_activate()
 {
@@ -99,13 +92,13 @@ LRESULT TypefindWindow::on_message(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 
         if (m_wnd_edit) {
             if (s_font) {
-                SendMessage(m_wnd_edit, WM_SETFONT, reinterpret_cast<WPARAM>(s_font.get()), MAKELPARAM(0, 0));
+                SetWindowFont(m_wnd_edit, s_font.get(), FALSE);
             } else
                 s_update_all_fonts();
 
-            SetWindowLongPtr(m_wnd_edit, GWLP_USERDATA, reinterpret_cast<LPARAM>(this));
-            m_editproc = (WNDPROC)SetWindowLongPtr(
-                m_wnd_edit, GWLP_WNDPROC, reinterpret_cast<LPARAM>(s_handle_hooked_edit_message));
+            uih::subclass_window(m_wnd_edit, [this](auto wnd_proc, auto wnd, auto msg, auto wp, auto lp) {
+                return handle_hooked_edit_message(wnd_proc, wnd, msg, wp, lp);
+            });
 
             set_window_theme();
             m_colours_notifier = std::make_unique<ColourNotifier>([this, self = ptr{this}] { set_window_theme(); },
@@ -114,7 +107,8 @@ LRESULT TypefindWindow::on_message(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
                     RedrawWindow(m_wnd_edit, nullptr, nullptr, RDW_INVALIDATE);
                 });
         }
-    } break;
+        break;
+    }
     case WM_GETMINMAXINFO: {
         const auto mmi = reinterpret_cast<LPMINMAXINFO>(lp);
         mmi->ptMinTrackSize.y = height;
@@ -162,17 +156,11 @@ LRESULT TypefindWindow::on_message(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
         }
         break;
     }
-    return uDefWindowProc(wnd, msg, wp, lp);
+    return DefWindowProc(wnd, msg, wp, lp);
 }
 
-LRESULT WINAPI TypefindWindow::s_handle_hooked_edit_message(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
-{
-    TypefindWindow* self = reinterpret_cast<TypefindWindow*>(GetWindowLongPtr(wnd, GWLP_USERDATA));
-
-    return self ? self->handle_hooked_edit_message(wnd, msg, wp, lp) : uDefWindowProc(wnd, msg, wp, lp);
-}
-
-LRESULT WINAPI TypefindWindow::handle_hooked_edit_message(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
+std::optional<LRESULT> WINAPI TypefindWindow::handle_hooked_edit_message(
+    WNDPROC wnd_proc, HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     switch (msg) {
     case WM_KEYDOWN:
@@ -181,36 +169,32 @@ LRESULT WINAPI TypefindWindow::handle_hooked_edit_message(HWND wnd, UINT msg, WP
         } else if (m_search.on_key(wp))
             return 0;
         else if (wp == VK_DELETE) {
-            const LRESULT ret = CallWindowProc(m_editproc, wnd, msg, wp, lp);
+            const LRESULT ret = CallWindowProc(wnd_proc, wnd, msg, wp, lp);
             m_search.set_string(uGetWindowText(wnd));
             return ret;
         }
-        /*
-        else if (wp == VK_ESCAPE)
-        {
-            SetFocus(wnd_prev);
-            return 0;
-        }*/
         break;
     case WM_SYSKEYDOWN:
         break;
     case WM_CHAR: {
         bool ctrl_down = 0 != (GetKeyState(VK_CONTROL) & KF_UP);
+
         if (wp == VK_RETURN || (wp == 0xa && ctrl_down) || wp == VK_ESCAPE)
             return 0;
-        else if (!ctrl_down) {
-            // assert (wp != VK_DELETE);
+
+        if (!ctrl_down) {
             unsigned start{};
             unsigned end{};
             SendMessage(wnd, EM_GETSEL, reinterpret_cast<WPARAM>(&start), reinterpret_cast<LPARAM>(&end));
             if (wp == VK_BACK || start != end || end != SendMessage(wnd, WM_GETTEXTLENGTH, 0, 0)) {
-                const LRESULT ret = CallWindowProc(m_editproc, wnd, msg, wp, lp);
+                const LRESULT ret = CallWindowProc(wnd_proc, wnd, msg, wp, lp);
                 m_search.set_string(uGetWindowText(wnd));
                 return ret;
             }
             m_search.add_char(gsl::narrow<unsigned>(wp));
         }
-    } break;
+        break;
+    }
     case WM_SETFOCUS:
         m_wnd_previous_focus = reinterpret_cast<HWND>(wp);
         if (height == 0)
@@ -222,24 +206,15 @@ LRESULT WINAPI TypefindWindow::handle_hooked_edit_message(HWND wnd, UINT msg, WP
         get_host()->on_size_limit_change(
             get_wnd(), ui_extension::size_limit_minimum_height | ui_extension::size_limit_maximum_height);
         on_size();
-    } break;
-    case WM_GETDLGCODE:
-        /*{
-            MSG * msg = (LPMSG)lp;
-            if (msg)
-            {
-            // let dialog manager handle it, otherwise to kill ping we have to process WM_CHAR to return 0 on wp == 0xd
-        and 0xa if ((msg->lParam == WM_KEYDOWN) && msg->wParam == VK_BACK) return DLGC_WANTMESSAGE;
-            }
-        }*/
         break;
     }
-    return CallWindowProc(m_editproc, wnd, msg, wp, lp);
+    }
+    return {};
 }
 
 void TypefindWindow::get_config(stream_writer* p_out, abort_callback& p_abort) const
 {
-    p_out->write_lendian_t(t_uint32(stream_version_current), p_abort);
+    p_out->write_lendian_t(static_cast<t_uint32>(stream_version_current), p_abort);
     p_out->write_string(m_pattern, p_abort);
     p_out->write_lendian_t(m_mode, p_abort);
 }
@@ -255,14 +230,15 @@ void TypefindWindow::get_category(pfc::string_base& out) const
 
 void TypefindWindow::set_config(stream_reader* p_source, size_t p_size, abort_callback& p_abort)
 {
-    if (p_size) {
-        t_uint32 version;
-        p_source->read_lendian_t(version, p_abort);
-        if (version <= stream_version_current) {
-            p_source->read_string(m_pattern, p_abort);
-            p_source->read_lendian_t(m_mode, p_abort);
-        }
-    }
+    if (p_size == 0)
+        return;
+
+    if (const auto stream_version = p_source->read_lendian_t<uint32_t>(p_abort);
+        stream_version > stream_version_current)
+        return;
+
+    p_source->read_string(m_pattern, p_abort);
+    m_mode = p_source->read_lendian_t<uint32_t>(p_abort);
 }
 
 const GUID TypefindWindow::extension_guid
@@ -280,8 +256,8 @@ INT_PTR TypefindWindow::handle_config_dialog_message(HWND wnd, UINT msg, WPARAM 
         ComboBox_AddString(wnd_combo, L"Query");
         ComboBox_SetCurSel(wnd_combo, m_mode);
         EnableWindow(GetDlgItem(wnd, IDC_VALUE), m_mode == mode_pattern_beginning);
-    }
         return TRUE;
+    }
     case WM_COMMAND:
         switch (wp) {
         case IDCANCEL:
@@ -329,7 +305,11 @@ void TypefindWindow::set_window_theme() const
     SetWindowTheme(m_wnd_edit, is_dark ? L"DarkMode_Explorer" : nullptr, nullptr);
 }
 
-ui_extension::window_factory<TypefindWindow> blah;
+namespace {
+
+uie::window_factory<TypefindWindow> _typefind_factory;
+
+}
 
 class TypefindMenuItem : public mainmenu_commands {
     t_uint32 get_command_count() override { return 1; }
