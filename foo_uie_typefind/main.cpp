@@ -96,6 +96,8 @@ LRESULT TypefindWindow::on_message(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
             } else
                 s_update_all_fonts();
 
+            uih::subclass_window_and_paint_with_buffering(m_wnd_edit);
+            uih::enhance_edit_control(m_wnd_edit);
             uih::subclass_window(m_wnd_edit, [this](auto wnd_proc, auto wnd, auto msg, auto wp, auto lp) {
                 return handle_hooked_edit_message(wnd_proc, wnd, msg, wp, lp);
             });
