@@ -1,7 +1,29 @@
+#include "pch.h"
+
 #include "main.h"
 #include "version.h"
+#include "resource.h"
+
+using namespace wil::literals;
 
 namespace typefind_panel {
+
+namespace {
+
+struct SearchModeDescription {
+    SearchMode mode;
+    wil::zwstring_view name;
+};
+
+std::vector search_mode_descriptions{
+    SearchModeDescription{
+        SearchMode::mode_match_words_beginning_formatted_title, L"Match beginning of any word in formatted title"_zv},
+    SearchModeDescription{
+        SearchMode::mode_match_beginning_formatted_title, L"Match beginning of entire formatted title"_zv},
+    SearchModeDescription{SearchMode::mode_query, L"Use query syntax"_zv},
+};
+
+} // namespace
 
 DECLARE_COMPONENT_VERSION("Typefind",
 
@@ -19,9 +41,10 @@ constexpr GUID guid_default_search_mode
     = {0x4e16a134, 0x1270, 0x4051, {0x9c, 0x4f, 0x77, 0x18, 0x19, 0xd4, 0xca, 0xd2}};
 
 cfg_string cfg_default_search(
-    GUID{0xe6e375cd, 0x6b89, 0x5fc8, {0x3f, 0xec, 0xce, 0xf4, 0x8b, 0xdc, 0x94, 0xcf}}, "%artist% - %title%");
+    GUID{0xe6e375cd, 0x6b89, 0x5fc8, {0x3f, 0xec, 0xce, 0xf4, 0x8b, 0xdc, 0x94, 0xcf}}, "%artist% %title%");
 
-cfg_int_t<t_uint32> cfg_default_search_mode(guid_default_search_mode, 0);
+cfg_int_t<t_uint32> cfg_default_search_mode(
+    guid_default_search_mode, WI_EnumValue(SearchMode::mode_match_words_beginning_formatted_title));
 
 namespace {
 
@@ -50,7 +73,11 @@ void TypefindWindow::s_update_all_fonts()
     }
 }
 
-TypefindWindow::TypefindWindow() : m_mode(cfg_default_search_mode), m_pattern(cfg_default_search.get()) {}
+TypefindWindow::TypefindWindow()
+    : m_mode(static_cast<SearchMode>(cfg_default_search_mode.get()))
+    , m_pattern(cfg_default_search.get())
+{
+}
 
 void TypefindWindow::s_activate()
 {
@@ -172,7 +199,7 @@ std::optional<LRESULT> WINAPI TypefindWindow::handle_hooked_edit_message(
             return 0;
         else if (wp == VK_DELETE) {
             const LRESULT ret = CallWindowProc(wnd_proc, wnd, msg, wp, lp);
-            m_search.set_string(uGetWindowText(wnd));
+            m_search.set_string(uih::get_window_text(wnd));
             return ret;
         }
         break;
@@ -190,10 +217,10 @@ std::optional<LRESULT> WINAPI TypefindWindow::handle_hooked_edit_message(
             SendMessage(wnd, EM_GETSEL, reinterpret_cast<WPARAM>(&start), reinterpret_cast<LPARAM>(&end));
             if (wp == VK_BACK || start != end || end != SendMessage(wnd, WM_GETTEXTLENGTH, 0, 0)) {
                 const LRESULT ret = CallWindowProc(wnd_proc, wnd, msg, wp, lp);
-                m_search.set_string(uGetWindowText(wnd));
+                m_search.set_string(uih::get_window_text(wnd));
                 return ret;
             }
-            m_search.add_char(gsl::narrow<unsigned>(wp));
+            m_search.add_char(gsl::narrow<wchar_t>(wp));
         }
         break;
     }
@@ -218,7 +245,7 @@ void TypefindWindow::get_config(stream_writer* p_out, abort_callback& p_abort) c
 {
     p_out->write_lendian_t(static_cast<t_uint32>(stream_version_current), p_abort);
     p_out->write_string(m_pattern, p_abort);
-    p_out->write_lendian_t(m_mode, p_abort);
+    p_out->write_lendian_t(WI_EnumValue(m_mode), p_abort);
 }
 
 void TypefindWindow::get_name(pfc::string_base& out) const
@@ -240,7 +267,7 @@ void TypefindWindow::set_config(stream_reader* p_source, size_t p_size, abort_ca
         return;
 
     p_source->read_string(m_pattern, p_abort);
-    m_mode = p_source->read_lendian_t<uint32_t>(p_abort);
+    m_mode = static_cast<SearchMode>(p_source->read_lendian_t<uint32_t>(p_abort));
 }
 
 const GUID TypefindWindow::extension_guid
@@ -254,10 +281,15 @@ INT_PTR TypefindWindow::handle_config_dialog_message(HWND wnd, UINT msg, WPARAM 
         SetWindowText(GetDlgItem(wnd, IDC_VALUE), pfc::stringcvt::string_os_from_utf8(m_pattern.get_ptr()));
 
         HWND wnd_combo = GetDlgItem(wnd, IDC_MODE);
-        ComboBox_AddString(wnd_combo, L"Search from beginning by pattern");
-        ComboBox_AddString(wnd_combo, L"Query");
-        ComboBox_SetCurSel(wnd_combo, m_mode);
-        EnableWindow(GetDlgItem(wnd, IDC_VALUE), m_mode == mode_pattern_beginning);
+        for (auto&& [index, mode_desc] : ranges::views::enumerate(search_mode_descriptions)) {
+            ComboBox_AddString(wnd_combo, mode_desc.name.c_str());
+            if (m_mode == mode_desc.mode)
+                ComboBox_SetCurSel(wnd_combo, index);
+        }
+
+        EnableWindow(GetDlgItem(wnd, IDC_VALUE),
+            m_mode == SearchMode::mode_match_beginning_formatted_title
+                || m_mode == SearchMode::mode_match_words_beginning_formatted_title);
         return TRUE;
     }
     case WM_COMMAND:
@@ -265,11 +297,15 @@ INT_PTR TypefindWindow::handle_config_dialog_message(HWND wnd, UINT msg, WPARAM 
         case IDCANCEL:
             EndDialog(wnd, 0);
             return TRUE;
-        case IDOK:
+        case IDOK: {
             m_pattern = uGetDlgItemText(wnd, IDC_VALUE);
-            m_mode = ComboBox_GetCurSel(GetDlgItem(wnd, IDC_MODE));
+            const auto mode_index = ComboBox_GetCurSel(GetDlgItem(wnd, IDC_MODE));
+
+            if (mode_index >= 0 && std::cmp_less(mode_index, search_mode_descriptions.size()))
+                m_mode = search_mode_descriptions[mode_index].mode;
+
             cfg_default_search = m_pattern;
-            cfg_default_search_mode = m_mode;
+            cfg_default_search_mode = WI_EnumValue(m_mode);
             if (m_initialised) {
                 m_search.reset();
                 m_search.set_pattern(m_pattern);
@@ -277,9 +313,15 @@ INT_PTR TypefindWindow::handle_config_dialog_message(HWND wnd, UINT msg, WPARAM 
             }
             EndDialog(wnd, 1);
             return TRUE;
-        case IDC_MODE | (CBN_SELCHANGE << 16):
-            EnableWindow(GetDlgItem(wnd, IDC_VALUE), ComboBox_GetCurSel(HWND(lp)) == 0);
+        }
+        case IDC_MODE | (CBN_SELCHANGE << 16): {
+            const auto mode_index = ComboBox_GetCurSel(GetDlgItem(wnd, IDC_MODE));
+            const auto enable = mode_index >= 0 && std::cmp_less(mode_index, search_mode_descriptions.size())
+                && search_mode_descriptions[mode_index].mode != SearchMode::mode_query;
+
+            EnableWindow(GetDlgItem(wnd, IDC_VALUE), enable);
             return TRUE;
+        }
         default:
             return FALSE;
         }
