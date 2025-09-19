@@ -90,21 +90,18 @@ public:
 
     void activate(bool b_focus = true)
     {
-        // if (GetFocus() != wnd_edit)
-        {
-            height = uih::get_font_height(s_font.get()) + 2_spx;
-            if (b_focus) {
-                SetFocus(m_wnd_edit);
-            }
-            SendMessage(m_wnd_edit, EM_SETSEL, 0, -1);
-            const auto text = uGetWindowText(m_wnd_edit);
-            m_search.init();
-            if (text.length())
-                m_search.set_string(text);
-            get_host()->on_size_limit_change(
-                get_wnd(), ui_extension::size_limit_minimum_height | ui_extension::size_limit_maximum_height);
-            on_size();
+        height = uih::get_font_height(s_font.get()) + 2_spx;
+        if (b_focus) {
+            SetFocus(m_wnd_edit);
         }
+        SendMessage(m_wnd_edit, EM_SETSEL, 0, -1);
+        const auto text = uGetWindowText(m_wnd_edit);
+        m_search.init();
+        if (text.length())
+            m_search.set_string(text);
+        get_host()->on_size_limit_change(
+            get_wnd(), ui_extension::size_limit_minimum_height | ui_extension::size_limit_maximum_height);
+        on_size();
     }
     void on_size(int cx, int cy);
     void on_size();
@@ -122,10 +119,9 @@ public:
     friend class font_notify;
 
 private:
-    static LRESULT WINAPI s_handle_hooked_edit_message(HWND wnd, UINT msg, WPARAM wp, LPARAM lp);
-
     LRESULT on_message(HWND wnd, UINT msg, WPARAM wp, LPARAM lp) override;
-    LRESULT WINAPI handle_hooked_edit_message(HWND wnd, UINT msg, WPARAM wp, LPARAM lp);
+    std::optional<LRESULT> WINAPI handle_hooked_edit_message(
+        WNDPROC wnd_proc, HWND wnd, UINT msg, WPARAM wp, LPARAM lp);
     INT_PTR handle_config_dialog_message(HWND wnd, UINT msg, WPARAM wp, LPARAM lp);
 
     void set_window_theme() const;
@@ -139,7 +135,6 @@ private:
     HWND m_wnd_edit{};
     HWND m_wnd_previous_focus{};
     bool m_initialised{};
-    WNDPROC m_editproc{};
     bool m_is_running{};
     int height{};
     t_uint32 m_mode{};
