@@ -23,6 +23,22 @@ std::vector search_mode_descriptions{
     SearchModeDescription{SearchMode::mode_query, L"Use query syntax"_zv},
 };
 
+void update_dependent_config_controls(const ConfigPopupState& state, HWND wnd)
+{
+    const auto enable_title_format = state.mode == SearchMode::mode_match_beginning_formatted_title
+        || state.mode == SearchMode::mode_match_words_beginning_formatted_title;
+
+    const auto title_format_wnd = GetDlgItem(wnd, IDC_VALUE);
+    const auto ignore_symbols_wnd = GetDlgItem(wnd, IDC_IGNORE_SYMBOLS);
+
+    EnableWindow(title_format_wnd, enable_title_format);
+    EnableWindow(ignore_symbols_wnd, enable_title_format);
+
+    uSetWindowText(title_format_wnd, enable_title_format ? state.title_format.c_str() : "");
+    Button_SetCheck(ignore_symbols_wnd, enable_title_format && state.ignore_symbols ? BST_CHECKED : BST_UNCHECKED);
+    uSetWindowText(title_format_wnd, enable_title_format ? state.title_format.c_str() : "");
+}
+
 } // namespace
 
 DECLARE_COMPONENT_VERSION("Typefind",
@@ -45,6 +61,9 @@ cfg_string cfg_default_search(
 
 cfg_int_t<t_uint32> cfg_default_search_mode(
     guid_default_search_mode, WI_EnumValue(SearchMode::mode_match_words_beginning_formatted_title));
+
+cfg_bool cfg_default_ignore_symbols(
+    {0xc8be1c4f, 0x7add, 0x400d, {0xa4, 0xb, 0xf1, 0x30, 0x21, 0xbc, 0xba, 0x15}}, true);
 
 namespace {
 
@@ -74,7 +93,8 @@ void TypefindWindow::s_update_all_fonts()
 }
 
 TypefindWindow::TypefindWindow()
-    : m_mode(static_cast<SearchMode>(cfg_default_search_mode.get()))
+    : m_ignore_symbols(cfg_default_ignore_symbols)
+    , m_mode(static_cast<SearchMode>(cfg_default_search_mode.get()))
     , m_pattern(cfg_default_search.get())
 {
 }
@@ -111,7 +131,7 @@ LRESULT TypefindWindow::on_message(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 
         modeless_dialog_manager::g_add(wnd);
 
-        m_search.set_pattern(m_pattern);
+        m_search.set_pattern(m_pattern, m_ignore_symbols);
         m_search.set_mode(m_mode);
 
         m_wnd_edit = CreateWindowEx(WS_EX_CLIENTEDGE, WC_EDIT, L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
@@ -246,6 +266,7 @@ void TypefindWindow::get_config(stream_writer* p_out, abort_callback& p_abort) c
     p_out->write_lendian_t(static_cast<t_uint32>(stream_version_current), p_abort);
     p_out->write_string(m_pattern, p_abort);
     p_out->write_lendian_t(WI_EnumValue(m_mode), p_abort);
+    p_out->write_lendian_t(m_ignore_symbols, p_abort);
 }
 
 void TypefindWindow::get_name(pfc::string_base& out) const
@@ -268,18 +289,21 @@ void TypefindWindow::set_config(stream_reader* p_source, size_t p_size, abort_ca
 
     p_source->read_string(m_pattern, p_abort);
     m_mode = static_cast<SearchMode>(p_source->read_lendian_t<uint32_t>(p_abort));
+
+    try {
+        m_ignore_symbols = p_source->read_lendian_t<bool>(p_abort);
+    } catch (const exception_io_data_truncation&) {
+    }
 }
 
 const GUID TypefindWindow::extension_guid
     = {0x89a3759f, 0x348a, 0x4e3f, {0xbf, 0x43, 0x3d, 0x16, 0xbc, 0x5, 0x91, 0x86}};
 
-INT_PTR TypefindWindow::handle_config_dialog_message(HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
+INT_PTR TypefindWindow::handle_config_dialog_message(ConfigPopupState& state, HWND wnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     switch (msg) {
     case WM_INITDIALOG: {
         m_config_scope.initialize(FindOwningPopup(wnd));
-        SetWindowText(GetDlgItem(wnd, IDC_VALUE), pfc::stringcvt::string_os_from_utf8(m_pattern.get_ptr()));
-
         HWND wnd_combo = GetDlgItem(wnd, IDC_MODE);
         for (auto&& [index, mode_desc] : ranges::views::enumerate(search_mode_descriptions)) {
             ComboBox_AddString(wnd_combo, mode_desc.name.c_str());
@@ -287,9 +311,12 @@ INT_PTR TypefindWindow::handle_config_dialog_message(HWND wnd, UINT msg, WPARAM 
                 ComboBox_SetCurSel(wnd_combo, index);
         }
 
-        EnableWindow(GetDlgItem(wnd, IDC_VALUE),
-            m_mode == SearchMode::mode_match_beginning_formatted_title
-                || m_mode == SearchMode::mode_match_words_beginning_formatted_title);
+        SetWindowText(GetDlgItem(wnd, IDC_VALUE), pfc::stringcvt::string_os_from_utf8(state.title_format.c_str()));
+
+        if (state.ignore_symbols)
+            Button_SetCheck(GetDlgItem(wnd, IDC_IGNORE_SYMBOLS), BST_CHECKED);
+
+        update_dependent_config_controls(state, wnd);
         return TRUE;
     }
     case WM_COMMAND:
@@ -298,17 +325,18 @@ INT_PTR TypefindWindow::handle_config_dialog_message(HWND wnd, UINT msg, WPARAM 
             EndDialog(wnd, 0);
             return TRUE;
         case IDOK: {
-            m_pattern = uGetDlgItemText(wnd, IDC_VALUE);
-            const auto mode_index = ComboBox_GetCurSel(GetDlgItem(wnd, IDC_MODE));
-
-            if (mode_index >= 0 && std::cmp_less(mode_index, search_mode_descriptions.size()))
-                m_mode = search_mode_descriptions[mode_index].mode;
-
+            m_pattern = state.title_format;
             cfg_default_search = m_pattern;
+
+            m_mode = state.mode;
             cfg_default_search_mode = WI_EnumValue(m_mode);
+
+            m_ignore_symbols = state.ignore_symbols;
+            cfg_default_ignore_symbols = m_ignore_symbols;
+
             if (m_initialised) {
                 m_search.reset();
-                m_search.set_pattern(m_pattern);
+                m_search.set_pattern(m_pattern, m_ignore_symbols);
                 m_search.set_mode(m_mode);
             }
             EndDialog(wnd, 1);
@@ -316,12 +344,18 @@ INT_PTR TypefindWindow::handle_config_dialog_message(HWND wnd, UINT msg, WPARAM 
         }
         case IDC_MODE | (CBN_SELCHANGE << 16): {
             const auto mode_index = ComboBox_GetCurSel(GetDlgItem(wnd, IDC_MODE));
-            const auto enable = mode_index >= 0 && std::cmp_less(mode_index, search_mode_descriptions.size())
-                && search_mode_descriptions[mode_index].mode != SearchMode::mode_query;
+            if (mode_index >= 0 && std::cmp_less(mode_index, search_mode_descriptions.size()))
+                state.mode = search_mode_descriptions[mode_index].mode;
 
-            EnableWindow(GetDlgItem(wnd, IDC_VALUE), enable);
+            update_dependent_config_controls(state, wnd);
             return TRUE;
         }
+        case IDC_VALUE | (EN_CHANGE << 16):
+            state.title_format = uGetWindowText(reinterpret_cast<HWND>(lp));
+            return TRUE;
+        case IDC_IGNORE_SYMBOLS:
+            state.ignore_symbols = Button_GetCheck(reinterpret_cast<HWND>(lp)) == BST_CHECKED;
+            return TRUE;
         default:
             return FALSE;
         }
@@ -335,9 +369,12 @@ INT_PTR TypefindWindow::handle_config_dialog_message(HWND wnd, UINT msg, WPARAM 
 
 bool TypefindWindow::show_config_popup(HWND wnd_parent)
 {
-    return fbh::auto_dark_modal_dialog_box(IDD_CONFIG, wnd_parent, [this, self = ptr{this}](auto&&... args) {
-        return handle_config_dialog_message(std::forward<decltype(args)>(args)...);
-    }) != 0;
+    return fbh::auto_dark_modal_dialog_box(IDD_CONFIG, wnd_parent,
+               [this, self = ptr{this}, state{ConfigPopupState{m_mode, m_pattern, m_ignore_symbols}}](
+                   auto&&... args) mutable {
+                   return handle_config_dialog_message(state, std::forward<decltype(args)>(args)...);
+               })
+        != 0;
 }
 
 void TypefindWindow::set_window_theme() const

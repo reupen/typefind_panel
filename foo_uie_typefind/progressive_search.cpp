@@ -14,11 +14,11 @@ auto split_into_words(std::wstring_view text)
           });
 }
 
-bool starts_with(std::wstring_view full_string, std::wstring_view partial_string)
+bool starts_with(std::wstring_view full_string, std::wstring_view partial_string, bool ignore_symbols)
 {
     const auto match_index = FindNLSStringEx(LOCALE_NAME_USER_DEFAULT,
-        FIND_STARTSWITH | LINGUISTIC_IGNOREDIACRITIC | NORM_IGNORECASE | NORM_IGNORESYMBOLS | NORM_IGNOREWIDTH
-            | NORM_LINGUISTIC_CASING,
+        FIND_STARTSWITH | LINGUISTIC_IGNOREDIACRITIC | NORM_IGNORECASE | NORM_IGNOREWIDTH | NORM_LINGUISTIC_CASING
+            | (ignore_symbols ? NORM_IGNORESYMBOLS : 0),
         full_string.data(), gsl::narrow<int>(full_string.size()), partial_string.data(),
         gsl::narrow<int>(partial_string.size()), nullptr, nullptr, nullptr, 0);
 
@@ -67,7 +67,7 @@ void typefind_panel::ProgressiveSearch::run()
             candidate_focus = index;
             break;
         case SearchMode::mode_match_beginning_formatted_title:
-            if (starts_with(m_formatted[index], m_string)) {
+            if (starts_with(m_formatted[index], m_string, m_ignore_symbols)) {
                 if (!candidate_focus)
                     candidate_focus = index;
             } else {
@@ -78,9 +78,9 @@ void typefind_panel::ProgressiveSearch::run()
             const auto& target_string = m_formatted[index];
             auto target_words = split_into_words(target_string);
 
-            const auto all_terms_match = ranges::all_of(terms, [&target_words](auto&& term) {
-                return ranges::any_of(
-                    target_words, [term](auto&& target_word) { return starts_with(target_word, term); });
+            const auto all_terms_match = ranges::all_of(terms, [this, &target_words](auto&& term) {
+                return ranges::any_of(target_words,
+                    [this, term](auto&& target_word) { return starts_with(target_word, term, m_ignore_symbols); });
             });
 
             if (all_terms_match && !terms.empty()) {

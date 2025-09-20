@@ -60,7 +60,11 @@ public:
         run();
     }
 
-    void set_pattern(const char* src) { titleformat_compiler::get()->compile(m_to, src); }
+    void set_pattern(const char* src, bool ignore_symbols)
+    {
+        m_ignore_symbols = ignore_symbols;
+        titleformat_compiler::get()->compile(m_to, src);
+    }
 
     void set_mode(SearchMode mode) { m_mode = mode; }
 
@@ -129,6 +133,7 @@ private:
     void run();
 
     bool m_running{};
+    bool m_ignore_symbols{};
     metadb_handle_list_t<pfc::alloc_fast_aggressive> m_entries;
     service_ptr_t<titleformat_object> m_to;
     pfc::array_t<bool> m_filter;
