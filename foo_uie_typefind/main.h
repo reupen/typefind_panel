@@ -43,6 +43,12 @@ private:
     cui::colours::manager::ptr m_api;
 };
 
+struct ConfigPopupState {
+    SearchMode mode;
+    pfc::string8 title_format;
+    bool ignore_symbols{};
+};
+
 class TypefindWindow : public uie::container_uie_window_v3 {
 public:
     TypefindWindow();
@@ -103,7 +109,8 @@ private:
     LRESULT on_message(HWND wnd, UINT msg, WPARAM wp, LPARAM lp) override;
     std::optional<LRESULT> WINAPI handle_hooked_edit_message(
         WNDPROC wnd_proc, HWND wnd, UINT msg, WPARAM wp, LPARAM lp);
-    INT_PTR handle_config_dialog_message(HWND wnd, UINT msg, WPARAM wp, LPARAM lp);
+
+    INT_PTR handle_config_dialog_message(ConfigPopupState& state, HWND wnd, UINT msg, WPARAM wp, LPARAM lp);
 
     void set_window_theme() const;
 
@@ -117,6 +124,7 @@ private:
     HWND m_wnd_previous_focus{};
     bool m_initialised{};
     bool m_is_running{};
+    bool m_ignore_symbols{};
     int height{};
     SearchMode m_mode{};
     ProgressiveSearch m_search;
