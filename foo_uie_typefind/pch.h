@@ -4,6 +4,7 @@
 #define OEMRESOURCE
 
 #include <cwctype>
+#include <execution>
 #include <ranges>
 #include <regex>
 #include <sstream>
