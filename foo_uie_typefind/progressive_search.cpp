@@ -52,48 +52,47 @@ void typefind_panel::ProgressiveSearch::run()
         return;
     }
 
-    std::optional<size_t> candidate_focus;
-
     const auto terms = m_mode == SearchMode::mode_match_words_beginning_formatted_title
         ? split_into_words(m_string) | ranges::to<std::vector<std::wstring_view>>()
         : std::vector<std::wstring_view>{};
 
-    for (const auto index : std::ranges::views::iota(size_t{}, m_entries.get_count())) {
-        if (!m_filter[index])
-            continue;
+    const auto view = std::ranges::views::iota(size_t{}, m_entries.get_count());
 
-        switch (m_mode) {
-        case SearchMode::mode_query:
-            candidate_focus = index;
-            break;
-        case SearchMode::mode_match_beginning_formatted_title:
-            if (starts_with(m_formatted[index], m_string, m_ignore_symbols)) {
-                if (!candidate_focus)
-                    candidate_focus = index;
-            } else {
-                m_filter[index] = false;
+    if (m_mode != SearchMode::mode_query) {
+        std::for_each(std::execution::par, std::begin(view), std::end(view), [this, &terms](auto&& index) {
+            if (!m_filter[index])
+                return;
+
+            switch (m_mode) {
+            case SearchMode::mode_query:
+                break;
+            case SearchMode::mode_match_beginning_formatted_title:
+                if (!starts_with(m_formatted[index], m_string, m_ignore_symbols))
+                    m_filter[index] = false;
+                break;
+            case SearchMode::mode_match_words_beginning_formatted_title: {
+                const auto& target_string = m_formatted[index];
+                auto target_words = split_into_words(target_string);
+
+                const auto all_terms_match = ranges::all_of(terms, [this, &target_words](auto&& term) {
+                    return ranges::any_of(target_words,
+                        [this, term](auto&& target_word) { return starts_with(target_word, term, m_ignore_symbols); });
+                });
+
+                if (!all_terms_match || terms.empty())
+                    m_filter[index] = false;
+
+                break;
             }
-            break;
-        case SearchMode::mode_match_words_beginning_formatted_title: {
-            const auto& target_string = m_formatted[index];
-            auto target_words = split_into_words(target_string);
-
-            const auto all_terms_match = ranges::all_of(terms, [this, &target_words](auto&& term) {
-                return ranges::any_of(target_words,
-                    [this, term](auto&& target_word) { return starts_with(target_word, term, m_ignore_symbols); });
-            });
-
-            if (all_terms_match && !terms.empty()) {
-                if (!candidate_focus)
-                    candidate_focus = index;
-            } else {
-                m_filter[index] = false;
             }
-            break;
-        }
-        }
+        });
     }
 
+    auto candidate_focus_view = ranges::views::iota(size_t{}, m_entries.get_count())
+        | ranges::views::filter([this](auto index) { return m_filter[index]; }) | ranges::views::take(1);
+
+    const auto candidate_focus
+        = ranges::empty(candidate_focus_view) ? std::nullopt : std::make_optional(candidate_focus_view.front());
     const auto existing_focus = fbh::as_optional(m_playlist_api->playlist_get_focus_item(m_active));
 
     if (candidate_focus && !(existing_focus && *existing_focus < m_filter.get_size() && m_filter[*existing_focus])) {

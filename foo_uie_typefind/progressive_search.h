@@ -19,15 +19,32 @@ public:
             m_playlist_api->playlist_get_all_items(m_active, m_entries);
             m_filter.set_size(count);
             m_filter.fill(true);
-            m_buffer.prealloc(256);
 
             if (m_mode == SearchMode::mode_match_beginning_formatted_title
                 || m_mode == SearchMode::mode_match_words_beginning_formatted_title) {
                 m_formatted.resize(count);
 
-                for (const auto n : std::ranges::views::iota(size_t{}, count)) {
-                    m_entries[n]->format_title(nullptr, m_buffer, m_to, nullptr);
-                    m_formatted[n] = mmh::to_utf16(m_buffer.c_str());
+                const auto metadb_v2_api = metadb_v2::tryGet();
+
+                if (fb2k::isLowMemModeActive() && metadb_v2_api.is_valid()) {
+                    metadb_v2_api->queryMultiParallelEx_<std::string>(
+                        m_entries, [this](size_t index, const metadb_v2::rec_t& rec, auto&& buffer) {
+                            metadb_handle_v2::ptr track;
+                            track &= m_entries[index];
+
+                            mmh::StringAdaptor adapted_string(buffer);
+                            track->formatTitle_v2(rec, nullptr, adapted_string, m_to, nullptr);
+                            m_formatted[index] = mmh::to_utf16(buffer);
+                        });
+                } else {
+                    const auto view = std::ranges::views::iota(size_t{}, count);
+
+                    std::for_each(std::execution::par, std::begin(view), std::end(view), [this](auto&& n) {
+                        thread_local std::string buffer;
+                        mmh::StringAdaptor adapted_string(buffer);
+                        m_entries[n]->format_title(nullptr, adapted_string, m_to, nullptr);
+                        m_formatted[n] = mmh::to_utf16(buffer);
+                    });
                 }
             }
         }
@@ -40,7 +57,6 @@ public:
         m_filter.set_size(0);
         m_entries.remove_all();
         m_string.clear();
-        m_buffer.clear();
         m_formatted.clear();
     }
 
@@ -138,7 +154,6 @@ private:
     service_ptr_t<titleformat_object> m_to;
     pfc::array_t<bool> m_filter;
     std::wstring m_string;
-    pfc::string8_fastalloc m_buffer;
     static_api_ptr_t<playlist_manager> m_playlist_api;
     size_t m_active{};
     SearchMode m_mode{};
