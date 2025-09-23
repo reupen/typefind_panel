@@ -1,26 +1,5 @@
 #pragma once
 
-#define NOMINMAX
-#define OEMRESOURCE
-#define SEARCH_CACHING_ENABLED
-
-#include <ranges>
-
-// Included before windows.h, because pfc.h includes winsock2.h
-#include "../pfc/pfc.h"
-
-#include <Windows.h>
-#include <windowsx.h>
-
-#include <wil/win32_helpers.h>
-
-#include "../foobar2000/SDK/foobar2000.h"
-
-#include "../columns_ui-sdk/ui_extension.h"
-#include "../ui_helpers/stdafx.h"
-#include "../fbh/stdafx.h"
-
-#include "resource.h"
 #include "progressive_search.h"
 
 using namespace uih::literals::spx;
@@ -64,6 +43,12 @@ private:
     cui::colours::manager::ptr m_api;
 };
 
+struct ConfigPopupState {
+    SearchMode mode;
+    pfc::string8 title_format;
+    bool ignore_symbols{};
+};
+
 class TypefindWindow : public uie::container_uie_window_v3 {
 public:
     TypefindWindow();
@@ -95,10 +80,12 @@ public:
             SetFocus(m_wnd_edit);
         }
         SendMessage(m_wnd_edit, EM_SETSEL, 0, -1);
-        const auto text = uGetWindowText(m_wnd_edit);
+        const auto text = uih::get_window_text(m_wnd_edit);
         m_search.init();
-        if (text.length())
-            m_search.set_string(text);
+
+        if (!text.empty())
+            m_search.set_string(std::move(text));
+
         get_host()->on_size_limit_change(
             get_wnd(), ui_extension::size_limit_minimum_height | ui_extension::size_limit_maximum_height);
         on_size();
@@ -122,7 +109,8 @@ private:
     LRESULT on_message(HWND wnd, UINT msg, WPARAM wp, LPARAM lp) override;
     std::optional<LRESULT> WINAPI handle_hooked_edit_message(
         WNDPROC wnd_proc, HWND wnd, UINT msg, WPARAM wp, LPARAM lp);
-    INT_PTR handle_config_dialog_message(HWND wnd, UINT msg, WPARAM wp, LPARAM lp);
+
+    INT_PTR handle_config_dialog_message(ConfigPopupState& state, HWND wnd, UINT msg, WPARAM wp, LPARAM lp);
 
     void set_window_theme() const;
 
@@ -136,8 +124,9 @@ private:
     HWND m_wnd_previous_focus{};
     bool m_initialised{};
     bool m_is_running{};
+    bool m_ignore_symbols{};
     int height{};
-    t_uint32 m_mode{};
+    SearchMode m_mode{};
     ProgressiveSearch m_search;
     pfc::string8 m_pattern;
     std::unique_ptr<ColourNotifier> m_colours_notifier;
