@@ -36,7 +36,6 @@ void update_dependent_config_controls(const ConfigPopupState& state, HWND wnd)
 
     uSetWindowText(title_format_wnd, enable_title_format ? state.title_format.c_str() : "");
     Button_SetCheck(ignore_symbols_wnd, enable_title_format && state.ignore_symbols ? BST_CHECKED : BST_UNCHECKED);
-    uSetWindowText(title_format_wnd, enable_title_format ? state.title_format.c_str() : "");
 }
 
 } // namespace
