@@ -272,9 +272,10 @@ void TypefindWindow::get_name(pfc::string_base& out) const
 {
     out.set_string("Typefind");
 }
+
 void TypefindWindow::get_category(pfc::string_base& out) const
 {
-    out.set_string("Toolbars");
+    out.set_string("Panels");
 }
 
 void TypefindWindow::set_config(stream_reader* p_source, size_t p_size, abort_callback& p_abort)
