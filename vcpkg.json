@@ -1,12 +1,16 @@
 {
   "name": "typefind-panel",
   "version-string": "git",
-  "builtin-baseline": "a3f2ea0f3443180a6d93a1bcd679f90dfea0ae48",
-  "dependencies": ["fmt", "ms-gsl", "range-v3", "wil"],
+  "builtin-baseline": "84bab45d415d22042bd0b9081aea57f362da3f35",
+  "dependencies": ["fmt", "foonathan-lexy", "ms-gsl", "range-v3", "wil"],
   "overrides": [
     {
       "name": "fmt",
       "version": "12.0.0"
+    },
+    {
+      "name": "foonathan-lexy",
+      "version": "2025.5.0"
     },
     {
       "name": "ms-gsl",
